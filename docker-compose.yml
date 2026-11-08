@@ -1,0 +1,107 @@
+version: "3.9"
+
+services:
+  app:
+    build: .
+    container_name: pcro-app
+    restart: unless-stopped
+    working_dir: /var/www/html
+    volumes:
+      - ./:/var/www/html
+      - pcro-storage:/var/www/html/storage
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_DATABASE: pcro
+      DB_USERNAME: pcro
+      DB_PASSWORD: ${DB_PASSWORD:-pcro_local_secret}
+      QUEUE_CONNECTION: database
+      CRO_WORKER_MODE: process
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - pcro
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: pcro-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./:/var/www/html:ro
+      - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - app
+    networks:
+      - pcro
+
+  mysql:
+    image: mysql:8.4
+    container_name: pcro-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: pcro
+      MYSQL_USER: pcro
+      MYSQL_PASSWORD: ${DB_PASSWORD:-pcro_local_secret}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root_secret}
+    volumes:
+      - pcro-mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - pcro
+
+  worker:
+    build: ./browser-worker
+    container_name: pcro-browser-worker
+    restart: unless-stopped
+    environment:
+      PCRO_WORKER_HOST: 0.0.0.0
+      PCRO_WORKER_PORT: 8787
+      PCRO_WORKER_TOKEN: ${CRO_WORKER_TOKEN:-change-me}
+      PCRO_WORKER_DATA_DIR: /data
+    volumes:
+      - pcro-storage:/data/crawls
+    networks:
+      - pcro
+
+  queue:
+    build: .
+    container_name: pcro-queue
+    restart: unless-stopped
+    working_dir: /var/www/html
+    command: php artisan queue:work --sleep=3 --tries=1 --timeout=1260 --queue=crawls,analysis
+    volumes:
+      - ./:/var/www/html
+      - pcro-storage:/var/www/html/storage
+    environment:
+      APP_ENV: production
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_DATABASE: pcro
+      DB_USERNAME: pcro
+      DB_PASSWORD: ${DB_PASSWORD:-pcro_local_secret}
+      QUEUE_CONNECTION: database
+      CRO_WORKER_MODE: http
+      CRO_WORKER_URL: http://worker:8787
+      CRO_WORKER_TOKEN: ${CRO_WORKER_TOKEN:-change-me}
+    depends_on:
+      - mysql
+      - worker
+    networks:
+      - pcro
+
+volumes:
+  pcro-mysql:
+  pcro-storage:
+
+networks:
+  pcro:
+    driver: bridge

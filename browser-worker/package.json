@@ -1,0 +1,24 @@
+{
+  "name": "pcro-browser-worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Isolated Playwright + Lighthouse browser worker for Predictive CRO Intelligence",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "server": "node server.js",
+    "test": "node --test test/*.test.js",
+    "install-browser": "playwright install chromium"
+  },
+  "dependencies": {
+    "axe-core": "^4.10.2",
+    "ipaddr.js": "^2.5.0",
+    "lighthouse": "^12.8.0",
+    "playwright": "^1.52.0",
+    "robots-parser": "^3.0.1",
+    "tldts": "^7.0.0"
+  }
+}
